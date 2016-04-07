@@ -60,3 +60,12 @@ target/
 
 #Ipython Notebook
 .ipynb_checkpoints
+
+# env variables during development
+.env
+.env.gpg
+
+# editor swap files
+.*.sw?
+.sw?
+*~
