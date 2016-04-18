@@ -29,8 +29,10 @@ First set the following environment variables:
 * `AWS_SECRET_ACCESS_KEY`: The secret access key that corresponds to `AWS_ACCESS_KEY_ID`.
   If you're using a local file instead of downloading the report from S3, you can omit
   this.
-* `AWSBILL_GRAPHITE_URL`: The URL of the Graphite server to which to write metrics. If
-  instead you want to output metrics to stdout, set this environment variable to `stdout`.
+* `AWSBILL_GRAPHITE_HOST`: The hostname of the Graphite server to which to write metrics.
+  If instead you want to output metrics to stdout, set this environment variable to
+  `stdout`. If the Graphite port is not the default of 2003, you may append it after a
+  colon.
 * `AWSBILL_METRIC_PREFIX`: The prefix to use for metrics written to Graphite. If absent,
   metrics will begin with "`awsbill.`". If you set this, you should modify the `[awsbill]`
   stanza you added to Graphite's `storage-schemas.conf` accordingly.

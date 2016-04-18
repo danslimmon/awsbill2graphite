@@ -5,6 +5,7 @@ import json
 import logging
 import os
 import shutil
+import socket
 import sys
 import tempfile
 from datetime import timedelta
@@ -47,15 +48,21 @@ def open_csv():
 def open_output():
     """Opens the file-like object that will be used for output, and returns it.
 
-       Depending on the AWSBILL_GRAPHITE_URL environment variable, writes to this
+       Depending on the AWSBILL_GRAPHITE_HOST environment variable, writes to this
        object may be sent to a Graphite server or they may be written to stdout."""
-    output_url = os.getenv("AWSBILL_GRAPHITE_URL")
-    if output_url == "stdout":
+    output_host = os.getenv("AWSBILL_GRAPHITE_HOST")
+    if output_host is None:
+        raise ValueError("AWSBILL_GRAPHITE_HOST environment variable must specify the output destination; you may use 'stdout' to print metrics to stdout")
+    elif output_host == "stdout":
         output_file = sys.stdout
-    elif output_url.startswith("http://") or output_url.startswith("https://"):
-        raise NotImplementedError("Writing to Graphite not implemented yet")
     else:
-        raise ValueError("AWSBILL_GRAPHITE_URL environment variable must specify an HTTP or HTTPS URL, or be set to 'stdout'")
+        output_port = 2003
+        if ":" in output_host:
+            output_host = output_host.split(":", 1)[0]
+            output_port = int(output_host.split(":", 1)[1])
+        logging.info("Connecting to Graphite server '{0}' on port {1}".format(
+            output_host, output_port))
+        output_file = SocketWriter(socket.create_connection((output_host, output_port)))
     return output_file
 
 def download_latest_from_s3(s3_path):
@@ -108,6 +115,14 @@ def download_latest_from_s3(s3_path):
 
     cat_csv.close()
     return cat_csv_path
+
+
+class SocketWriter(object):
+    """Wraps a socket object with a file-like write() method."""
+    def __init__(self, sock):
+        self.sock = sock
+    def write(self, data):
+        return self.sock.send(data)
 
 
 class MetricLedger(object):
@@ -274,10 +289,8 @@ if __name__ == "__main__":
     logging.getLogger('boto').setLevel(logging.CRITICAL)
     logging.getLogger('boto3').setLevel(logging.CRITICAL)
     logging.getLogger('botocore').setLevel(logging.CRITICAL)
-    #    try:
+
     csv_file = open_csv()
     output_file = open_output()
     generate_metrics(csv_file, output_file)
-        #    except Exception, e:
-            #        logging.error("error: {0}".format(repr(e)))
-            #        sys.exit(1)
+    logging.info("Mission complete.")
