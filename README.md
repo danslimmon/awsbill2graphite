@@ -2,6 +2,19 @@
 
 Converts AWS hourly billing CSVs to Graphite metrics
 
+## Prep
+
+First of all, you'll need to have hourly billing reports enabled. You can do this
+through the AWS billing control panel.
+
+In order to prevent Graphite from creating giant, mostly-zero data files, set the
+following in `storage-schemas.conf`:
+
+    [awsbill]
+    priority = 256
+    pattern = ^awsbill\.
+    retentions = 1h:3650d
+
 ## Usage
 
 First set the following environment variables:
@@ -18,7 +31,9 @@ First set the following environment variables:
   this.
 * `AWSBILL_GRAPHITE_URL`: The URL of the Graphite server to which to write metrics. If
   instead you want to output metrics to stdout, set this environment variable to `stdout`.
-* `AWSBILL_METRIC_PREFIX`: The prefix to use for metrics written to Graphite.
+* `AWSBILL_METRIC_PREFIX`: The prefix to use for metrics written to Graphite. If absent,
+  metrics will begin with "`awsbill.`". If you set this, you should modify the `[awsbill]`
+  stanza you added to Graphite's `storage-schemas.conf` accordingly.
 * `AWSBILL_TAGS`: The (comma-separated) tags to produce metrics for. If you don't want
   to produce metrics for any tags, leave this environment variable empty.
 
