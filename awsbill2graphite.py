@@ -1,11 +1,16 @@
 #!/usr/bin/env python
-import os
-import sys
 import csv
+import gzip
+import json
 import logging
+import os
+import shutil
+import sys
+import tempfile
 from datetime import timedelta
 from collections import defaultdict
 
+import boto3
 import arrow
 
 REGION_NAMES = {
@@ -34,7 +39,7 @@ def open_csv():
     if report_path.startswith("file://"):
         csv_path = report_path[len("file://")-1:]
     elif report_path.startswith("s3://"):
-        raise NotImplementedError("S3 downloads not implemented yet")
+        csv_path = download_latest_from_s3(report_path)
     else:
         raise ValueError("AWSBILL_REPORT_PATH environment variable must start with 'file://' or 's3://'")
     return open(csv_path)
@@ -52,6 +57,57 @@ def open_output():
     else:
         raise ValueError("AWSBILL_GRAPHITE_URL environment variable must specify an HTTP or HTTPS URL, or be set to 'stdout'")
     return output_file
+
+def download_latest_from_s3(s3_path):
+    """Puts the latest hourly billing report from the given S3 path in a local file.
+
+       Returns the path to that file."""
+    # The path to the billing report manifest is like this:
+    #
+    # <bucket>/<configured prefix>/hourly_billing/<YYYYmmdd>-<YYYYmmdd>/hourly_billing-Manifest.json
+    #
+    # We look for the most recent timestamp directory and use the manifest therein to
+    # find the most recent billing CSV.
+    s3 = boto3.resource("s3")
+    bucket = s3.Bucket(s3_path.split("/")[2])
+    manifests = [o for o in bucket.objects.all() if "Manifest.json" in o.key]
+    # The primary manifest will be the one with the shortest path length
+    manifests.sort(lambda a, b: cmp(len(a.key), len(b.key)))
+    primary = manifests[0]
+
+    # Now we parse the manifest to get the path to the latest billing CSV
+    manifest = json.loads(primary.get()['Body'].read())
+    s3_csvs = manifest["reportKeys"]
+
+    # Download each billing CSV to a temp directory and decompress
+    tempdir = tempfile.mkdtemp(".awsbill")
+    try:
+        cat_csv_path = os.path.join(tempdir, "billing_full.csv")
+        cat_csv = open(cat_csv_path, "w")
+        header_written = False
+        for s3_csv in s3_csvs:
+            logging.info("Downloading CSV from S3: {0}".format(s3_csv))
+            local_path = os.path.join(tempdir, s3_csv.split("/")[-1])
+            local_file = open(local_path, "w")
+            obj = [o for o in bucket.objects.filter(Prefix=s3_csv)][0]
+            local_file.write(obj.get()['Body'].read())
+            local_file.close()
+            logging.info("Decompressing CSV: {0}".format(s3_csv))
+
+            with gzip.open(local_path, "r") as f:
+                for line in f:
+                    if line.startswith("identity/LineItemId,") and header_written:
+                        continue
+                    cat_csv.write(line)
+                    header_written = True
+                os.unlink(local_path)
+    except Exception, e:
+        logging.error("Cleaning up by removing temp directory '{0}'".format(tempdir))
+        shutil.rmtree(tempdir)
+        raise e
+
+    cat_csv.close()
+    return cat_csv_path
 
 
 class MetricLedger(object):
@@ -203,6 +259,7 @@ def generate_metrics(csv_file, output_file):
         ByInstanceType(),
         AllCosts(),
     ])
+    logging.info("Calculating billing metrics")
     for row_list in reader:
         row = Row(col_names, row_list)
         # Skip entries of the wrong type
@@ -213,10 +270,14 @@ def generate_metrics(csv_file, output_file):
     ledger.output(output_file)
 
 if __name__ == "__main__":
-    try:
-        csv_file = open_csv()
-        output_file = open_output()
-        generate_metrics(csv_file, output_file)
-    except Exception, e:
-        print("error: {0}".format(repr(e)))
-        sys.exit(1)
+    logging.basicConfig(format='%(asctime)s %(message)s', level=logging.INFO)
+    logging.getLogger('boto').setLevel(logging.CRITICAL)
+    logging.getLogger('boto3').setLevel(logging.CRITICAL)
+    logging.getLogger('botocore').setLevel(logging.CRITICAL)
+    #    try:
+    csv_file = open_csv()
+    output_file = open_output()
+    generate_metrics(csv_file, output_file)
+        #    except Exception, e:
+            #        logging.error("error: {0}".format(repr(e)))
+            #        sys.exit(1)
