@@ -1,11 +1,30 @@
 # awsbill2graphite
 
-Converts AWS hourly billing CSVs to Graphite metrics
+`awsbill2graphite` is a script that converts AWS hourly billing CSVs to Graphite metrics.
+
+![dashboard screenshot](https://raw.githubusercontent.com/danslimmon/awsbill2graphite/master/static/dashboard.png)
+
+So far, it only does two types of metrics:
+
+1. Per-region, per-EC2-instance-type cost by the hour
+2. Total AWS cost by the hour
+
+But more will be coming soon.
+
 
 ## Prep
 
 First of all, you'll need to have hourly billing reports enabled. You can do this
 through the AWS billing control panel.
+
+`awsbill2graphite` has some dependencies. We don't have a pip package yet (but we
+have an [issue](https://github.com/danslimmon/awsbill2graphite/issues/1) for it. To
+install the dependencies, go into a
+[virtualenv](http://docs.python-guide.org/en/latest/dev/virtualenvs/) and run
+
+    pip install -r requirements.txt
+
+The script will have to be run in that virtualenv.
 
 In order to prevent Graphite from creating giant, mostly-zero data files, set the
 following in `storage-schemas.conf`:
