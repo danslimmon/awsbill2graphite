@@ -184,12 +184,12 @@ class ByInstanceType(TimeseriesPattern):
         return ".".join((row.region(), row.usage_type(), row.instance_type()))
 
 
-class AllCosts(TimeseriesPattern):
-    """Describes a Graphite metric containing the sum of all hourly costs"""
+class ByRegion(TimeseriesPattern):
+    """Describes a Graphite metric containing the sum of all hourly costs per region"""
     def match(self, row):
         return True
     def metric_name(self, row):
-        return "all-regions.all-types.total-cost"
+        return "total-cost.{0}".format(row.region())
 
 
 class Row(object):
@@ -272,7 +272,7 @@ def generate_metrics(csv_file, output_file):
     formatter = MetricFormatter()
     ledger = MetricLedger([
         ByInstanceType(),
-        AllCosts(),
+        ByRegion(),
     ])
     logging.info("Calculating billing metrics")
     for row_list in reader:
