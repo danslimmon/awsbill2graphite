@@ -107,7 +107,7 @@ def download_latest_from_s3(s3_path):
                         continue
                     cat_csv.write(line)
                     header_written = True
-                os.unlink(local_path)
+                    os.unlink(local_path)
     except Exception, e:
         logging.error("Cleaning up by removing temp directory '{0}'".format(tempdir))
         shutil.rmtree(tempdir)
@@ -121,8 +121,8 @@ class SocketWriter(object):
     """Wraps a socket object with a file-like write() method."""
     def __init__(self, sock):
         self.sock = sock
-    def write(self, data):
-        return self.sock.send(data)
+        def write(self, data):
+            return self.sock.send(data)
 
 
 class MetricLedger(object):
@@ -131,16 +131,16 @@ class MetricLedger(object):
         """Initializes the MetricLedger with a list of TimeseriesPattern objects."""
         self._patterns = timeseries_patterns
         self._timeseries = defaultdict(lambda: defaultdict(float))
-    def process(self, row):
-        """Adds the data from the given Row object to any appropriate timeseries."""
-        for pat in self._patterns:
-            if pat.match(row):
-                self._timeseries[pat.metric_name(row)][row.end_time()] += row.amount()
-    def output(self, output_file):
-        formatter = MetricFormatter()
-        for ts_id, ts in self._timeseries.iteritems():
-            for timestamp, value in ts.iteritems():
-                output_file.write(formatter.format(ts_id, timestamp, value))
+        def process(self, row):
+            """Adds the data from the given Row object to any appropriate timeseries."""
+            for pat in self._patterns:
+                if pat.match(row):
+                    self._timeseries[pat.metric_name(row)][row.end_time()] += row.amount()
+                    def output(self, output_file):
+                        formatter = MetricFormatter()
+                        for ts_id, ts in self._timeseries.iteritems():
+                            for timestamp, value in ts.iteritems():
+                                output_file.write(formatter.format(ts_id, timestamp, value))
 
 
 class MetricFormatter(object):
@@ -149,6 +149,8 @@ class MetricFormatter(object):
         self._initial_pieces = []
         if os.getenv("AWSBILL_METRIC_PREFIX") != "":
             self._initial_pieces = [os.getenv("AWSBILL_METRIC_PREFIX")]
+        else:
+            self._initial_pieces = ["awsbill"]
 
     def format(self, ts_id, timestamp, value):
         """Returns the Graphite line that corresponds to the given timeseries ID, timestamp, and value."""
