@@ -31,7 +31,7 @@ LINE_ITEMS = {
     ("AmazonEC2", "OnDemand", "ec2-instance"): True,
 }
 
-def open_csv():
+def open_csv(tempdir):
     """Opens the latest hourly billing CSV file. Returns an open file object.
     
        Depending on the AWSBILL_REPORT_PATH environment variable, this may involve
@@ -40,7 +40,7 @@ def open_csv():
     if report_path.startswith("file://"):
         csv_path = report_path[len("file://")-1:]
     elif report_path.startswith("s3://"):
-        csv_path = download_latest_from_s3(report_path)
+        csv_path = download_latest_from_s3(report_path, tempdir)
     else:
         raise ValueError("AWSBILL_REPORT_PATH environment variable must start with 'file://' or 's3://'")
     return open(csv_path)
@@ -65,7 +65,7 @@ def open_output():
         output_file = SocketWriter(socket.create_connection((output_host, output_port)))
     return output_file
 
-def download_latest_from_s3(s3_path):
+def download_latest_from_s3(s3_path, tempdir):
     """Puts the latest hourly billing report from the given S3 path in a local file.
 
        Returns the path to that file."""
@@ -87,7 +87,6 @@ def download_latest_from_s3(s3_path):
     s3_csvs = manifest["reportKeys"]
 
     # Download each billing CSV to a temp directory and decompress
-    tempdir = tempfile.mkdtemp(".awsbill")
     try:
         cat_csv_path = os.path.join(tempdir, "billing_full.csv")
         cat_csv = open(cat_csv_path, "w")
@@ -107,9 +106,10 @@ def download_latest_from_s3(s3_path):
                         continue
                     cat_csv.write(line)
                     header_written = True
-                    os.unlink(local_path)
+            # Remove these files as we finish with them to save on disk space
+            os.unlink(local_path)
     except Exception, e:
-        logging.error("Cleaning up by removing temp directory '{0}'".format(tempdir))
+        logging.error("Exception encountered; cleaning up by removing temp directory '{0}'".format(tempdir))
         shutil.rmtree(tempdir)
         raise e
 
@@ -131,16 +131,20 @@ class MetricLedger(object):
         """Initializes the MetricLedger with a list of TimeseriesPattern objects."""
         self._patterns = timeseries_patterns
         self._timeseries = defaultdict(lambda: defaultdict(float))
-        def process(self, row):
-            """Adds the data from the given Row object to any appropriate timeseries."""
-            for pat in self._patterns:
-                if pat.match(row):
-                    self._timeseries[pat.metric_name(row)][row.end_time()] += row.amount()
-                    def output(self, output_file):
-                        formatter = MetricFormatter()
-                        for ts_id, ts in self._timeseries.iteritems():
-                            for timestamp, value in ts.iteritems():
-                                output_file.write(formatter.format(ts_id, timestamp, value))
+
+    def process(self, row):
+        """Adds the data from the given Row object to any appropriate timeseries."""
+        for pat in self._patterns:
+            if pat.match(row):
+                for metric in pat.metric_names(row):
+                    self._timeseries[metric][row.end_time()] += row.amount()
+
+    def output(self, output_file):
+        formatter = MetricFormatter()
+        logging.info("Writing metrics to timeseries database")
+        for ts_id, ts in self._timeseries.iteritems():
+            for timestamp, value in ts.iteritems():
+                output_file.write(formatter.format(ts_id, timestamp, value))
 
 
 class MetricFormatter(object):
@@ -170,11 +174,10 @@ class TimeseriesPattern(object):
 
            Returns True if so."""
         raise NotImplementedError("This is an abstract class")
-    def metric_name(self, row):
-        """Returns the name of the metric to which the given row's amount() value should be added.
+    def metric_names(self, row):
+        """Returns the names of the metrics to which the given row's amount() value should be added.
 
-           We assume that match() has been called on the row already, and returned
-           True."""
+           We assume that match() has been called on the row already, and returned True."""
         raise NotImplementedError("This is an abstract class")
 
 
@@ -182,16 +185,16 @@ class ByInstanceType(TimeseriesPattern):
     """Describes per-EC2-instance-type Graphite metrics."""
     def match(self, row):
         return (row.usage_type() == "ec2-instance" and len(row.tags()) == 0)
-    def metric_name(self, row):
-        return ".".join((row.region(), row.usage_type(), row.instance_type()))
+    def metric_names(self, row):
+        return [".".join((row.region(), row.usage_type(), row.instance_type()))]
 
 
 class ByRegion(TimeseriesPattern):
     """Describes a Graphite metric containing the sum of all hourly costs per region"""
     def match(self, row):
         return True
-    def metric_name(self, row):
-        return "total-cost.{0}".format(row.region())
+    def metric_names(self, row):
+        return ["total-cost.{0}".format(row.region())]
 
 
 class Row(object):
@@ -292,7 +295,9 @@ if __name__ == "__main__":
     logging.getLogger('boto3').setLevel(logging.CRITICAL)
     logging.getLogger('botocore').setLevel(logging.CRITICAL)
 
-    csv_file = open_csv()
+    tempdir = tempfile.mkdtemp(".awsbill")
+    csv_file = open_csv(tempdir)
     output_file = open_output()
     generate_metrics(csv_file, output_file)
+    logging.info("Removing temp directory '{0}'".format(tempdir))
     logging.info("Mission complete.")
