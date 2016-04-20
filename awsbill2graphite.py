@@ -60,9 +60,7 @@ def open_output():
         if ":" in output_host:
             output_host = output_host.split(":", 1)[0]
             output_port = int(output_host.split(":", 1)[1])
-        logging.info("Connecting to Graphite server '{0}' on port {1}".format(
-            output_host, output_port))
-        output_file = SocketWriter(socket.create_connection((output_host, output_port)))
+        output_file = SocketWriter(output_host, output_port)
     return output_file
 
 def download_latest_from_s3(s3_path, tempdir):
@@ -119,10 +117,15 @@ def download_latest_from_s3(s3_path, tempdir):
 
 class SocketWriter(object):
     """Wraps a socket object with a file-like write() method."""
-    def __init__(self, sock):
-        self.sock = sock
-        def write(self, data):
-            return self.sock.send(data)
+    def __init__(self, host, port):
+        self.host = host
+        self.port = port
+        self._sock = None
+    def write(self, data):
+        if self._sock is None:
+            logging.info("Connecting to Graphite server at {0}:{1}".format(self.host, self.port))
+            self._sock = socket.create_connection((self.host, self.port))
+        return self.sock.send(data)
 
 
 class MetricLedger(object):
