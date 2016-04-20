@@ -1,4 +1,3 @@
-arrow==0.7.0
 boto3==1.3.0
 botocore==1.4.11
 python-dateutil==2.5.2

@@ -8,11 +8,10 @@ import shutil
 import socket
 import sys
 import tempfile
-from datetime import timedelta
+from datetime import datetime, timedelta
 from collections import defaultdict
 
 import boto3
-import arrow
 
 REGION_NAMES = {
     "US East (N. Virginia)": "us-east-1",
@@ -30,6 +29,17 @@ REGION_NAMES = {
 LINE_ITEMS = {
     ("AmazonEC2", "OnDemand", "ec2-instance"): True,
 }
+
+def parse_datetime(timestamp):
+    """Parses a timestamp in the format 2006-01-02T15:04:05Z."""
+    # This way is about 31x faster than arrow.get() and 6.5x faster than datetime.strptime()
+    year = int(timestamp[0:4])
+    month = int(timestamp[5:7])
+    day = int(timestamp[8:10])
+    hour = int(timestamp[11:13])
+    minute = int(timestamp[14:16])
+    second = int(timestamp[17:19])
+    return datetime(year, month, day, hour, minute, second)
 
 def open_csv(tempdir):
     """Opens the latest hourly billing CSV file. Returns an open file object.
@@ -216,7 +226,7 @@ class Row(object):
 
     def interval(self):
         """Returns the length of the time interval to which this row correpsonds, in seconds."""
-        start, end = [arrow.get(x) for x in self.content["identity/TimeInterval"].split("/", 1)]
+        start, end = [parse_datetime(x) for x in self.content["identity/TimeInterval"].split("/", 1)]
         return int((end - start).total_seconds())
 
     def usage_type(self):
@@ -264,7 +274,7 @@ class Row(object):
         return splut[1].replace(".", "-")
 
     def end_time(self):
-        return arrow.get(self.content["identity/TimeInterval"].split("/", 1)[1])
+        return parse_datetime(self.content["identity/TimeInterval"].split("/", 1)[1])
 
     def tags(self):
         return {}
