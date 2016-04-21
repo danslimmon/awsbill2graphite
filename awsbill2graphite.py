@@ -135,7 +135,7 @@ class SocketWriter(object):
         if self._sock is None:
             logging.info("Connecting to Graphite server at {0}:{1}".format(self.host, self.port))
             self._sock = socket.create_connection((self.host, self.port))
-        return self.sock.send(data)
+        return self._sock.send(data)
 
 
 class MetricLedger(object):
