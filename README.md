@@ -4,12 +4,13 @@
 
 ![dashboard screenshot](https://raw.githubusercontent.com/danslimmon/awsbill2graphite/master/static/dashboard.png)
 
-So far, it only does two types of metrics:
+So far, it does the following types of metrics:
 
 1. Per-region, per-EC2-instance-type cost by the hour
-2. Total AWS cost by the hour
+2. EBS metrics, including storage costs, PIOPS costs, and per-million-IOPS costs.
+3. Total AWS cost by the hour
 
-But more will be coming soon.
+More are planned.
 
 
 ## Prep
