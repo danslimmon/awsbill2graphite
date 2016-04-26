@@ -82,3 +82,11 @@ like so:
 
 Each metric will have a data point every hour. This data point represents the total amount
 charged to your account for the hour _previous_ to the data point's timestamp.
+
+## Making Graphite/Grafana dashboards with these metrics
+
+A few notes (okay just one right now, but you get the idea):
+
+* Snapshots are only billed once daily, so the snapshot metrics will be equal to 0 for
+  most of their values. The value they do contain will be the cost for that _entire day_,
+  not the hour.

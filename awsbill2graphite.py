@@ -228,6 +228,14 @@ class TsEbsIops(TimeseriesPattern):
         return [".".join((row.region(), "ebs.iops"))]
 
 
+class TsEbsSnapshot(TimeseriesPattern):
+    """Describes the metric for EBS snapshot costs."""
+    def match(self, row):
+        return row.usage_type() == "ebs.snapshot"
+    def metric_names(self, row):
+        return [".".join((row.region(), "ebs.snapshot"))]
+
+
 class TsRegionTotal(TimeseriesPattern):
     """Describes a Graphite metric containing the sum of all hourly costs per region"""
     def match(self, row):
@@ -271,10 +279,10 @@ class Row(object):
            subtype, in the format in which it'll appear in the Graphite metric. Examples
            of usage types are:
 
-               ec2-instance
-               ec2-other
-               elb
-               rds
+               ec2-instance.c3-2xlarge
+               ebs.storage.io1
+               ebs.piops
+               rds-instance.db-r3.large
                
            This method returns the empty string if the usage type isn't known."""
         if self._usage_type is not None:
@@ -295,6 +303,8 @@ class Row(object):
             self._usage_type = self._usage_type_ebs_storage()
         if csv_usage_type == "EBS:VolumeIOUsage":
             self._usage_type = "ebs.iops"
+        if csv_usage_type == "EBS:SnapshotUsage":
+            self._usage_type = "ebs.snapshot"
         return self._usage_type
 
     def _usage_type_ec2_instance(self):
@@ -327,6 +337,7 @@ def generate_metrics(csv_file, output_file):
         TsEbsStorage(),
         TsEbsPiops(),
         TsEbsIops(),
+        TsEbsSnapshot(),
         TsRegionTotal(),
     ])
     logging.info("Calculating billing metrics")
