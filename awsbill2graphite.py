@@ -237,10 +237,11 @@ class TsRegionTotal(TimeseriesPattern):
 
 
 class Row(object):
-    __slots__ = ["content"]
+    __slots__ = ["content", "_usage_type"]
     def __init__(self, col_names, row_list):
         """Initializes a Row object, given the names of the CSV columns and their values."""
         self.content = dict(zip(col_names, row_list))
+        self._usage_type = None
 
     def region(self):
         """Returns the normalized AWS region for the row, or 'noregion'.
@@ -276,22 +277,25 @@ class Row(object):
                rds
                
            This method returns the empty string if the usage type isn't known."""
+        if self._usage_type is not None:
+            return self._usage_type
         splut = self.content["lineItem/UsageType"].split("-", 1)
         if len(splut[0]) == 4 and splut[0][0:2] in ("US", "EU", "AP", "SA") and splut[0].isupper() and splut[0][3].isdigit():
             # Stuff before dash was probably a region code like "APN1" or "USW2"
-            usage_type = splut[1]
+            csv_usage_type = splut[1]
         else:
-            usage_type = splut[0]
+            csv_usage_type = splut[0]
 
-        if usage_type.startswith("BoxUsage:"):
-            return "ec2-instance"
-        if usage_type == "EBS:VolumeP-IOPS.piops":
-            return "ebs.piops"
-        if usage_type.startswith("EBS:VolumeUsage"):
-            return "ebs.storage"
-        if usage_type == "EBS:VolumeIOUsage":
-            return "ebs.iops"
-        return ""
+        self._usage_type = ""
+        if csv_usage_type.startswith("BoxUsage:"):
+            self._usage_type = "ec2-instance"
+        if csv_usage_type == "EBS:VolumeP-IOPS.piops":
+            self._usage_type = "ebs.piops"
+        if csv_usage_type.startswith("EBS:VolumeUsage"):
+            self._usage_type = "ebs.storage"
+        if csv_usage_type == "EBS:VolumeIOUsage":
+            self._usage_type = "ebs.iops"
+        return self._usage_type
 
     def volume_type(self):
         """Returns the volume type corresponding to a row of an "ebs.*" usage_type.
