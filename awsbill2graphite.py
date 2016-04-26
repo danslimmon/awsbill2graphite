@@ -288,35 +288,24 @@ class Row(object):
 
         self._usage_type = ""
         if csv_usage_type.startswith("BoxUsage:"):
-            self._usage_type = "ec2-instance"
+            self._usage_type = self._usage_type_ec2_instance()
         if csv_usage_type == "EBS:VolumeP-IOPS.piops":
             self._usage_type = "ebs.piops"
         if csv_usage_type.startswith("EBS:VolumeUsage"):
-            self._usage_type = "ebs.storage"
+            self._usage_type = self._usage_type_ebs_storage()
         if csv_usage_type == "EBS:VolumeIOUsage":
             self._usage_type = "ebs.iops"
         return self._usage_type
 
-    def volume_type(self):
-        """Returns the volume type corresponding to a row of an "ebs.*" usage_type.
-
-           The instance type will be "standard", "io1", or "gp2"."""
-        return EBS_TYPES[self.content["product/volumeType"]]
-
-    def instance_type(self):
-        """Returns the instance type corresponding to a row of the "ec2-instance" usage_type.
-
-           The instance type will have all "." characters replaced with "-" because "." is
-           the separator for parts of a Graphite metric name.
-
-           Returns None if no instance type can be parsed (e.g. if this row is not of the
-           "ec2-instance" usage type)."""
-        if "BoxUsage:" not in self.content["lineItem/UsageType"]:
-            return None
+    def _usage_type_ec2_instance(self):
         splut = self.content["lineItem/UsageType"].split(":", 1)
         if len(splut) < 2:
             return None
-        return splut[1].replace(".", "-")
+        instance_type = splut[1].replace(".", "-")
+        return "ec2-instance.{0}".format(instance_type)
+
+    def _usage_type_ebs_storage(self):
+        return "ebs.storage.{0}".format(EBS_TYPES[self.content["product/volumeType"]])
 
     def end_time(self):
         return parse_datetime(self.content["identity/TimeInterval"].split("/", 1)[1])
