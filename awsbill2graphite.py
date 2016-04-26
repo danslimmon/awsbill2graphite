@@ -26,8 +26,10 @@ REGION_NAMES = {
     "South America (Sao Paulo)": "sa-east-1",
 }
 
-LINE_ITEMS = {
-    ("AmazonEC2", "OnDemand", "ec2-instance"): True,
+EBS_TYPES = {
+    "Magnetic": "standard",
+    "General Purpose": "gp2",
+    "Provisioned IOPS": "io1",
 }
 
 def parse_datetime(timestamp):
@@ -194,15 +196,39 @@ class TimeseriesPattern(object):
         raise NotImplementedError("This is an abstract class")
 
 
-class ByInstanceType(TimeseriesPattern):
+class TsInstanceType(TimeseriesPattern):
     """Describes per-EC2-instance-type Graphite metrics."""
     def match(self, row):
-        return (row.usage_type() == "ec2-instance" and len(row.tags()) == 0)
+        return (row.usage_type() == "ec2-instance")
     def metric_names(self, row):
-        return [".".join((row.region(), row.usage_type(), row.instance_type()))]
+        return [".".join((row.region(), "ec2-instance", row.instance_type()))]
 
 
-class ByRegion(TimeseriesPattern):
+class TsEbsStorage(TimeseriesPattern):
+    """Describes per-volume-type EBS storage metric."""
+    def match(self, row):
+        return row.usage_type() == "ebs.storage"
+    def metric_names(self, row):
+        return [".".join((row.region(), "ebs.storage", row.volume_type()))]
+
+
+class TsEbsPiops(TimeseriesPattern):
+    """Describes the metric for PIOPS-month costs."""
+    def match(self, row):
+        return row.usage_type() == "ebs.piops"
+    def metric_names(self, row):
+        return [".".join((row.region(), "ebs.piops"))]
+
+
+class TsEbsIops(TimeseriesPattern):
+    """Describes the metric for IOPS costs."""
+    def match(self, row):
+        return row.usage_type() == "ebs.iops"
+    def metric_names(self, row):
+        return [".".join((row.region(), "ebs.iops"))]
+
+
+class TsRegionTotal(TimeseriesPattern):
     """Describes a Graphite metric containing the sum of all hourly costs per region"""
     def match(self, row):
         return True
@@ -249,14 +275,29 @@ class Row(object):
                elb
                rds
                
-           This method returns None if the usage type isn't known."""
-        splut = self.content["lineItem/UsageType"].split("-")
+           This method returns the empty string if the usage type isn't known."""
+        splut = self.content["lineItem/UsageType"].split("-", 1)
         if len(splut[0]) == 4 and splut[0][0:2] in ("US", "EU", "AP", "SA") and splut[0].isupper() and splut[0][3].isdigit():
             # Stuff before dash was probably a region code like "APN1" or "USW2"
-            splut = splut[1:]
-        if splut[0].startswith("BoxUsage:"):
+            usage_type = splut[1]
+        else:
+            usage_type = splut[0]
+
+        if usage_type.startswith("BoxUsage:"):
             return "ec2-instance"
-        return None
+        if usage_type == "EBS:VolumeP-IOPS.piops":
+            return "ebs.piops"
+        if usage_type.startswith("EBS:VolumeUsage"):
+            return "ebs.storage"
+        if usage_type == "EBS:VolumeIOUsage":
+            return "ebs.iops"
+        return ""
+
+    def volume_type(self):
+        """Returns the volume type corresponding to a row of an "ebs.*" usage_type.
+
+           The instance type will be "standard", "io1", or "gp2"."""
+        return EBS_TYPES[self.content["product/volumeType"]]
 
     def instance_type(self):
         """Returns the instance type corresponding to a row of the "ec2-instance" usage_type.
@@ -289,8 +330,11 @@ def generate_metrics(csv_file, output_file):
     col_names = reader.next()
     formatter = MetricFormatter()
     ledger = MetricLedger([
-        ByInstanceType(),
-        ByRegion(),
+        TsInstanceType(),
+        TsEbsStorage(),
+        TsEbsPiops(),
+        TsEbsIops(),
+        TsRegionTotal(),
     ])
     logging.info("Calculating billing metrics")
     for row_list in reader:
