@@ -7,7 +7,8 @@
 So far, it does the following types of metrics:
 
 1. Per-region, per-EC2-instance-type cost by the hour
-2. EBS metrics, including storage costs, PIOPS costs, and per-million-IOPS costs.
+2. EBS metrics, including storage costs, PIOPS costs, per-million-IOPS costs, and snapshot
+   storage costs
 3. Total AWS cost by the hour
 
 More are planned.
