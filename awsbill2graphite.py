@@ -356,9 +356,13 @@ if __name__ == "__main__":
     logging.getLogger('boto3').setLevel(logging.CRITICAL)
     logging.getLogger('botocore').setLevel(logging.CRITICAL)
 
-    tempdir = tempfile.mkdtemp(".awsbill")
-    csv_file = open_csv(tempdir)
-    output_file = open_output()
-    generate_metrics(csv_file, output_file)
-    logging.info("Removing temp directory '{0}'".format(tempdir))
-    logging.info("Mission complete.")
+    try:
+        tempdir = tempfile.mkdtemp(".awsbill")
+        csv_file = open_csv(tempdir)
+        output_file = open_output()
+        generate_metrics(csv_file, output_file)
+        logging.info("Removing temp directory '{0}'".format(tempdir))
+        shutil.rmtree(tempdir)
+        logging.info("Mission complete.")
+    except Exception, e:
+        logging.exception(e)
