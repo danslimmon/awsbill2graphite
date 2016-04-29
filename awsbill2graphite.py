@@ -50,7 +50,7 @@ def open_csv(tempdir):
        downloading from S3, or it may just open a local file."""
     report_path = os.getenv("AWSBILL_REPORT_PATH")
     if report_path.startswith("file://"):
-        csv_path = report_path[len("file://")-1:]
+        csv_path = report_path[len("file://"):]
     elif report_path.startswith("s3://"):
         csv_path = download_latest_from_s3(report_path, tempdir)
     else:
@@ -149,6 +149,11 @@ class MetricLedger(object):
 
     def process(self, row):
         """Adds the data from the given Row object to any appropriate timeseries."""
+        # Skip entries of the wrong type
+        if row.content["lineItem/LineItemType"] != "Usage": return
+        # Skip non-hourly entries
+        if row.interval() != 3600: return
+
         for pat in self._patterns:
             if pat.match(row):
                 for metric in pat.metric_names(row):
@@ -160,6 +165,10 @@ class MetricLedger(object):
         for ts_id, ts in self._timeseries.iteritems():
             for timestamp, value in ts.iteritems():
                 output_file.write(formatter.format(ts_id, timestamp, value))
+
+    def get_timeseries(self):
+        """Returns self._timeseries (for tests)."""
+        return self._timeseries
 
 
 class MetricFormatter(object):
@@ -374,13 +383,8 @@ class Row(object):
     def amount(self):
         return float(self.content["lineItem/BlendedCost"])
 
-
-def generate_metrics(csv_file, output_file):
-    """Generates metrics from the given CSV and writes them to the given file-like object."""
-    reader = csv.reader(csv_file)
-    col_names = reader.next()
-    formatter = MetricFormatter()
-    ledger = MetricLedger([
+def new_metric_ledger():
+    return MetricLedger([
         # EC2
         TsInstanceType(),
         TsEbsStorage(),
@@ -394,13 +398,16 @@ def generate_metrics(csv_file, output_file):
         # Total
         TsRegionTotal(),
     ])
+
+def generate_metrics(csv_file, output_file):
+    """Generates metrics from the given CSV and writes them to the given file-like object."""
+    reader = csv.reader(csv_file)
+    col_names = reader.next()
+    formatter = MetricFormatter()
+    ledger = new_metric_ledger()
     logging.info("Calculating billing metrics")
     for row_list in reader:
         row = Row(col_names, row_list)
-        # Skip entries of the wrong type
-        if row.content["lineItem/LineItemType"] != "Usage": continue
-        # Skip non-hourly entries
-        if row.interval() != 3600: continue
         ledger.process(row)
     ledger.output(output_file)
 

@@ -4,6 +4,8 @@
 
 ![dashboard screenshot](https://raw.githubusercontent.com/danslimmon/awsbill2graphite/master/static/dashboard.png)
 
+_If you want to hack on it, check out [DEV.md](https://github.com/danslimmon/awsbill2graphite/blob/master/DEV.md)._
+
 So far, it does the following types of metrics:
 
 1. Per-region, per-EC2-instance-type cost by the hour
