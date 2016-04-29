@@ -199,17 +199,17 @@ class TimeseriesPattern(object):
 class TsInstanceType(TimeseriesPattern):
     """Describes per-EC2-instance-type Graphite metrics."""
     def match(self, row):
-        return (row.usage_type() == "ec2-instance")
+        return (row.usage_type().startswith("ec2-instance."))
     def metric_names(self, row):
-        return [".".join((row.region(), "ec2-instance", row.instance_type()))]
+        return [".".join((row.region(), row.usage_type()))]
 
 
 class TsEbsStorage(TimeseriesPattern):
     """Describes per-volume-type EBS storage metric."""
     def match(self, row):
-        return row.usage_type() == "ebs.storage"
+        return row.usage_type().startswith("ebs.storage.")
     def metric_names(self, row):
-        return [".".join((row.region(), "ebs.storage", row.volume_type()))]
+        return [".".join((row.region(), row.usage_type()))]
 
 
 class TsEbsPiops(TimeseriesPattern):
@@ -236,8 +236,36 @@ class TsEbsSnapshot(TimeseriesPattern):
         return [".".join((row.region(), "ebs.snapshot"))]
 
 
+class TsRdsInstanceType(TimeseriesPattern):
+    """Describes per-RDS-instance-type Graphite metrics."""
+    def match(self, row):
+        return (row.usage_type().startswith("rds-instance."))
+    def metric_names(self, row):
+        return [".".join((row.region(), row.usage_type()))]
+
+
+class TsRdsStorage(TimeseriesPattern):
+    """Describes per-volume-type RDS storage metric."""
+    def match(self, row):
+        return row.usage_type().startswith("rds.storage.")
+    def metric_names(self, row):
+        return [".".join((row.region(), row.usage_type()))]
+
+
+class TsRdsPiops(TimeseriesPattern):
+    """Describes the metric for RDS PIOPS-month costs."""
+    def match(self, row):
+        return row.usage_type() == "rds.piops"
+    def metric_names(self, row):
+        return [".".join((row.region(), "rds.piops"))]
+
+
 class TsRegionTotal(TimeseriesPattern):
-    """Describes a Graphite metric containing the sum of all hourly costs per region"""
+    """Describes a Graphite metric containing the sum of all hourly costs per region.
+    
+       This includes costs that we don't explicitly recognize and break out into
+       individual metrics. Any cost that shows up in the billing report will go into
+       this metric."""
     def match(self, row):
         return True
     def metric_names(self, row):
@@ -282,7 +310,7 @@ class Row(object):
                ec2-instance.c3-2xlarge
                ebs.storage.io1
                ebs.piops
-               rds-instance.db-r3.large
+               rds-instance.db-r3-large
                
            This method returns the empty string if the usage type isn't known."""
         if self._usage_type is not None:
@@ -293,8 +321,9 @@ class Row(object):
             csv_usage_type = splut[1]
         else:
             csv_usage_type = splut[0]
-
         self._usage_type = ""
+
+        # EC2
         if csv_usage_type.startswith("BoxUsage:"):
             self._usage_type = self._usage_type_ec2_instance()
         if csv_usage_type == "EBS:VolumeP-IOPS.piops":
@@ -305,6 +334,15 @@ class Row(object):
             self._usage_type = "ebs.iops"
         if csv_usage_type == "EBS:SnapshotUsage":
             self._usage_type = "ebs.snapshot"
+
+        # RDS
+        if csv_usage_type.startswith("InstanceUsage:") or csv_usage_type.startswith("Multi-AZUsage:"):
+            self._usage_type = self._usage_type_rds_instance()
+        if csv_usage_type == "RDS:PIOPS" or csv_usage_type == "RDS:Multi-AZ-PIOPS":
+            self._usage_type = "rds.piops"
+        if csv_usage_type.startswith("RDS:") and csv_usage_type.endswith("Storage"):
+            self._usage_type = self._usage_type_rds_storage()
+
         return self._usage_type
 
     def _usage_type_ec2_instance(self):
@@ -316,6 +354,16 @@ class Row(object):
 
     def _usage_type_ebs_storage(self):
         return "ebs.storage.{0}".format(EBS_TYPES[self.content["product/volumeType"]])
+
+    def _usage_type_rds_instance(self):
+        splut = self.content["lineItem/UsageType"].split(":", 1)
+        if len(splut) < 2:
+            return None
+        instance_type = splut[1].replace(".", "-")
+        return "rds-instance.{0}".format(instance_type)
+
+    def _usage_type_rds_storage(self):
+        return "rds.storage.{0}".format(EBS_TYPES[self.content["product/volumeType"]])
 
     def end_time(self):
         return parse_datetime(self.content["identity/TimeInterval"].split("/", 1)[1])
@@ -333,11 +381,17 @@ def generate_metrics(csv_file, output_file):
     col_names = reader.next()
     formatter = MetricFormatter()
     ledger = MetricLedger([
+        # EC2
         TsInstanceType(),
         TsEbsStorage(),
         TsEbsPiops(),
         TsEbsIops(),
         TsEbsSnapshot(),
+        # RDS
+        TsRdsInstanceType(),
+        TsRdsStorage(),
+        TsRdsPiops(),
+        # Total
         TsRegionTotal(),
     ])
     logging.info("Calculating billing metrics")

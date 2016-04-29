@@ -9,7 +9,8 @@ So far, it does the following types of metrics:
 1. Per-region, per-EC2-instance-type cost by the hour
 2. EBS metrics, including storage costs, PIOPS costs, per-million-IOPS costs, and snapshot
    storage costs
-3. Total AWS cost by the hour
+3. Per-region RDS costs, including storage, PIOPS, and instance-hours
+4. Total AWS cost by the hour
 
 More are planned.
 
@@ -68,23 +69,25 @@ This will produce metrics named like so:
 
     PREFIX.REGION.ec2-instance.t2-micro
     PREFIX.REGION.ec2-instance.c4-2xlarge
-    PREFIX.REGION.ec2-other.snapshot-storage
-    PREFIX.REGION.ec2-other.piops
-    PREFIX.REGION.rds.m4-medium
+    PREFIX.REGION.ebs.snapshot
+    PREFIX.REGION.ebs.piops
+    PREFIX.REGION.rds.db-r3-xlarge
 
 If tags are specified in `AWSBILL_TAGS`, then additional metrics will be populated, named
 like so:
 
     PREFIX.REGION.TAG_NAME.TAG_VALUE.ec2-instance.t2-micro
     PREFIX.REGION.TAG_NAME.TAG_VALUE.ec2-instance.c4-2xlarge
-    PREFIX.REGION.TAG_NAME.TAG_VALUE.ec2-other.snapshot-storage
-    PREFIX.REGION.TAG_NAME.TAG_VALUE.ec2-other.piops
-    PREFIX.REGION.TAG_NAME.TAG_VALUE.rds.m4-medium
+    PREFIX.REGION.TAG_NAME.TAG_VALUE.ebs.snapshot
+    PREFIX.REGION.TAG_NAME.TAG_VALUE.ebs.piops
+    PREFIX.REGION.TAG_NAME.TAG_VALUE.rds.db-r3-xlarge
 
 Each metric will have a data point every hour. This data point represents the total amount
 charged to your account for the hour _previous_ to the data point's timestamp.
 
 ## Making Graphite/Grafana dashboards with these metrics
+
+Here is a JSON description of a basic per-region-summary Grafana dashboard: [grafana_dashboard.json](https://github.com/danslimmon/awsbill2graphite/blob/master/static/grafana_dashboard.json).
 
 A few notes (okay just one right now, but you get the idea):
 
