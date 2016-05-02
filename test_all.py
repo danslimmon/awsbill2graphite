@@ -1,6 +1,7 @@
 import csv
-from datetime import datetime
+import random
 import unittest
+from datetime import datetime
 
 import awsbill2graphite as a2g
 
@@ -90,6 +91,9 @@ class LedgerTest(unittest.TestCase):
     def testS3PrimaryManifest(self):
         class _S3Obj:
             def __init__(self, k): self.key = k
+            # Make sure sorting the objects without `key=` causes test to fail
+            def __lt__(self, o): return (random.randint(0, 1) == 0)
+
         manifests = [_S3Obj(k) for k in [
             "prefix/hourly_billing/20160201-20160301/hourly_billing-Manifest.json",
             "prefix/hourly_billing/20160301-20160401/hourly_billing-Manifest.json",
@@ -108,5 +112,5 @@ class LedgerTest(unittest.TestCase):
             "prefix/hourly_billing/20160301-20160401/fbc0aa99-1083-11e6-918b-881fa1019b9e/hourly_billing-Manifest.json",
         ]]
         primary = a2g.s3_primary_manifest(manifests)
-        self.assertTrue(primary.key,
+        self.assertEqual(primary.key,
                         "prefix/hourly_billing/20160501-20160601/hourly_billing-Manifest.json")

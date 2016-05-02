@@ -9,8 +9,9 @@ import shutil
 import socket
 import sys
 import tempfile
-from datetime import datetime, timedelta
 from collections import defaultdict
+from datetime import datetime, timedelta
+from operator import attrgetter
 
 import boto3
 
@@ -89,8 +90,7 @@ def s3_primary_manifest(objects):
     manifests = [o for o in objects if o.key.endswith("Manifest.json")]
 
     # Filter to those from the most recent billing cycle
-    manifests.sort()
-    manifests.reverse()
+    manifests.sort(key=attrgetter("key"), reverse=True)
     for m in manifests:
         rslt = re.search("/(\d{8}-\d{8})/", m.key)
         if rslt is not None:
@@ -101,7 +101,7 @@ def s3_primary_manifest(objects):
     manifests = [m for m in manifests if cycle in m.key]
 
     # The primary manifest will be the one with the shortest path length
-    manifests.sort(key=lambda a: a.key)
+    manifests.sort(key=lambda a: len(a.key))
     return manifests[0]
 
 def download_latest_from_s3(s3_path, tempdir):
