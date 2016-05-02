@@ -111,6 +111,8 @@ class LedgerTest(unittest.TestCase):
             "prefix/hourly_billing/20160301-20160401/fbc0aa99-1083-11e6-918b-881fa1019b9e/hourly_billing-1.csv.gz",
             "prefix/hourly_billing/20160301-20160401/fbc0aa99-1083-11e6-918b-881fa1019b9e/hourly_billing-Manifest.json",
         ]]
-        primary = a2g.s3_primary_manifest(manifests)
-        self.assertEqual(primary.key,
+        primaries = a2g.s3_primary_manifests(manifests)
+        self.assertEqual(primaries[0].key,
+                        "prefix/hourly_billing/20160401-20160501/hourly_billing-Manifest.json")
+        self.assertEqual(primaries[1].key,
                         "prefix/hourly_billing/20160501-20160601/hourly_billing-Manifest.json")

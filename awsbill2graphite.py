@@ -77,10 +77,14 @@ def open_output():
         output_file = SocketWriter(output_host, output_port)
     return output_file
 
-def s3_primary_manifest(objects):
-    """Returns the S3 object corresponding to the primary manifest for the most recent cycle.
+def s3_primary_manifests(objects):
+    """Returns the S3 object(s) corresponding to the relevant primary manifest(s).
+
+       The relevant ones are considered to be the second-most- and most recent ones, and
+       they are returned in that order. If there are no billing cycles older than the
+       most recent, we return a single-element list with only the most recent manifest.
     
-       Expects an iterable of S3 objects."""
+       `objects` should be an iterable of S3 objects."""
     # The path to the billing report manifest is like this:
     #
     # <bucket>/<configured prefix>/hourly_billing/<YYYYmmdd>-<YYYYmmdd>/hourly_billing-Manifest.json
@@ -89,20 +93,26 @@ def s3_primary_manifest(objects):
     # find the most recent billing CSV.
     manifests = [o for o in objects if o.key.endswith("Manifest.json")]
 
-    # Filter to those from the most recent billing cycle
+    # Filter to those from the second-most- and most recent billing cycle
     manifests.sort(key=attrgetter("key"), reverse=True)
+    cycles = set([])
     for m in manifests:
         rslt = re.search("/(\d{8}-\d{8})/", m.key)
         if rslt is not None:
-            cycle = rslt.group(1)
-            break
-    else:
+            cycles.add(rslt.group(1))
+    if len(cycles) == 0:
         raise Exception("Failed to find any appropriately-named billing CSVs")
-    manifests = [m for m in manifests if cycle in m.key]
+    last_two_cycles = sorted(list(cycles))[-2:]
+    if len(last_two_cycles) < 2:
+        last_two_cycles = 2 * last_two_cycles
+    manifests = [m for m in manifests if last_two_cycles[0] in m.key or last_two_cycles[1] in m.key]
 
-    # The primary manifest will be the one with the shortest path length
+    # The primary manifest(s) will be the one(s) with the shortest path length
     manifests.sort(key=lambda a: len(a.key))
-    return manifests[0]
+    if last_two_cycles[0] == last_two_cycles[1]:
+        # There was only one billing cycle present among the manifests
+        return [manifests[0]]
+    return [manifests[1], manifests[0]]
 
 def download_latest_from_s3(s3_path, tempdir):
     """Puts the latest hourly billing report from the given S3 path in a local file.
@@ -110,12 +120,14 @@ def download_latest_from_s3(s3_path, tempdir):
        Returns the path to that file."""
     s3 = boto3.resource("s3")
     bucket = s3.Bucket(s3_path.split("/")[2])
-    primary = s3_primary_manifest(bucket.objects.all())
-    logging.info("Using primary manifest '{0}'".format(primary.key))
+    primaries = s3_primary_manifests(bucket.objects.all())
+    logging.info("Using primary manifest(s) {0}".format([p.key for p in primaries]))
 
     # Now we parse the manifest to get the path to the latest billing CSV
-    manifest = json.loads(primary.get()['Body'].read())
-    s3_csvs = manifest["reportKeys"]
+    s3_csvs = []
+    for pri in primaries:
+        manifest = json.loads(pri.get()['Body'].read())
+        s3_csvs.extend(manifest["reportKeys"])
 
     # Download each billing CSV to a temp directory and decompress
     try:
