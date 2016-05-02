@@ -101,7 +101,7 @@ def s3_primary_manifest(objects):
     manifests = [m for m in manifests if cycle in m.key]
 
     # The primary manifest will be the one with the shortest path length
-    manifests.sort(lambda a, b: cmp(len(a.key), len(b.key)))
+    manifests.sort(key=lambda a: a.key)
     return manifests[0]
 
 def download_latest_from_s3(s3_path, tempdir):
@@ -111,6 +111,7 @@ def download_latest_from_s3(s3_path, tempdir):
     s3 = boto3.resource("s3")
     bucket = s3.Bucket(s3_path.split("/")[2])
     primary = s3_primary_manifest(bucket.objects.all())
+    logging.info("Using primary manifest '{0}'".format(primary.key))
 
     # Now we parse the manifest to get the path to the latest billing CSV
     manifest = json.loads(primary.get()['Body'].read())
