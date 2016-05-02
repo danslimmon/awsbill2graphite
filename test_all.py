@@ -91,9 +91,10 @@ class LedgerTest(unittest.TestCase):
         class _S3Obj:
             def __init__(self, k): self.key = k
         manifests = [_S3Obj(k) for k in [
+            "prefix/hourly_billing/20160301-20160401/hourly_billing-Manifest.json",
             "prefix/hourly_billing/20160401-20160501/11c0a000-107e-11e6-813f-881fa1019b9e/hourly_billing-1.csv.gz",
             "prefix/hourly_billing/20160401-20160501/11c0a000-107e-11e6-813f-881fa1019b9e/hourly_billing-Manifest.json",
-            "prefix/hourly_billing/20160501-20160501/hourly_billing-Manifest.json",
+            "prefix/hourly_billing/20160501-20160601/hourly_billing-Manifest.json",
             "prefix/hourly_billing/20160401-20160501/21b3c44a-107e-11e6-8355-881fa1019b9e/hourly_billing-1.csv.gz",
             "prefix/hourly_billing/20160401-20160501/21b3c44a-107e-11e6-8355-881fa1019b9e/hourly_billing-2.csv.gz",
             "prefix/hourly_billing/20160401-20160501/21b3c44a-107e-11e6-8355-881fa1019b9e/hourly_billing-Manifest.json",
@@ -105,4 +106,4 @@ class LedgerTest(unittest.TestCase):
         ]]
         primary = a2g.s3_primary_manifest(manifests)
         self.assertTrue(primary.key,
-                        "prefix/hourly_billing/20160501-20160501/hourly_billing-Manifest.json")
+                        "prefix/hourly_billing/20160501-20160601/hourly_billing-Manifest.json")

@@ -92,7 +92,7 @@ def s3_primary_manifest(objects):
     manifests.sort()
     manifests.reverse()
     for m in manifests:
-        rslt = re.search("/(\d{8}-\d{8})/", manifests[-1].key)
+        rslt = re.search("/(\d{8}-\d{8})/", m.key)
         if rslt is not None:
             cycle = rslt.group(1)
             break
