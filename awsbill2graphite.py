@@ -4,6 +4,7 @@ import gzip
 import json
 import logging
 import os
+import re
 import shutil
 import socket
 import sys
@@ -75,22 +76,41 @@ def open_output():
         output_file = SocketWriter(output_host, output_port)
     return output_file
 
-def download_latest_from_s3(s3_path, tempdir):
-    """Puts the latest hourly billing report from the given S3 path in a local file.
-
-       Returns the path to that file."""
+def s3_primary_manifest(objects):
+    """Returns the S3 object corresponding to the primary manifest for the most recent cycle.
+    
+       Expects an iterable of S3 objects."""
     # The path to the billing report manifest is like this:
     #
     # <bucket>/<configured prefix>/hourly_billing/<YYYYmmdd>-<YYYYmmdd>/hourly_billing-Manifest.json
     #
     # We look for the most recent timestamp directory and use the manifest therein to
     # find the most recent billing CSV.
-    s3 = boto3.resource("s3")
-    bucket = s3.Bucket(s3_path.split("/")[2])
-    manifests = [o for o in bucket.objects.all() if "Manifest.json" in o.key]
+    manifests = [o for o in objects if o.key.endswith("Manifest.json")]
+
+    # Filter to those from the most recent billing cycle
+    manifests.sort()
+    manifests.reverse()
+    for m in manifests:
+        rslt = re.search("/(\d{8}-\d{8})/", manifests[-1].key)
+        if rslt is not None:
+            cycle = rslt.group(1)
+            break
+    else:
+        raise Exception("Failed to find any appropriately-named billing CSVs")
+    manifests = [m for m in manifests if cycle in m.key]
+
     # The primary manifest will be the one with the shortest path length
     manifests.sort(lambda a, b: cmp(len(a.key), len(b.key)))
-    primary = manifests[0]
+    return manifests[0]
+
+def download_latest_from_s3(s3_path, tempdir):
+    """Puts the latest hourly billing report from the given S3 path in a local file.
+
+       Returns the path to that file."""
+    s3 = boto3.resource("s3")
+    bucket = s3.Bucket(s3_path.split("/")[2])
+    primary = s3_primary_manifest(bucket.objects.all())
 
     # Now we parse the manifest to get the path to the latest billing CSV
     manifest = json.loads(primary.get()['Body'].read())
