@@ -96,3 +96,7 @@ A few notes (okay just one right now, but you get the idea):
 * Snapshots are only billed once daily, so the snapshot metrics will be equal to 0 for
   most of their values. The value they do contain will be the cost for that _entire day_,
   not the hour.
+* At the end of a month, the billing report you get will be missing most of the final
+  day's data. That's just how AWS hourly billing reports work. Eventually (4 or 5 days
+  after the end of the month) they give you a final report for the month, with all the
+  data. So in the interim, you'll have a big ugly dip in your graphs.
