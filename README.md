@@ -91,7 +91,7 @@ charged to your account for the hour _previous_ to the data point's timestamp.
 
 Here is a JSON description of a basic per-region-summary Grafana dashboard: [grafana_dashboard.json](https://github.com/danslimmon/awsbill2graphite/blob/master/static/grafana_dashboard.json).
 
-A few notes (okay just one right now, but you get the idea):
+A few notes:
 
 * Snapshots are only billed once daily, so the snapshot metrics will be equal to 0 for
   most of their values. The value they do contain will be the cost for that _entire day_,
