@@ -12,7 +12,8 @@ So far, it does the following types of metrics:
 2. EBS metrics, including storage costs, PIOPS costs, per-million-IOPS costs, and snapshot
    storage costs
 3. Per-region RDS costs, including storage, PIOPS, and instance-hours
-4. Total AWS cost by the hour
+4. ElastiCache costs per-instance-type
+5. Total AWS cost by the hour
 
 More are planned.
 

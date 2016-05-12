@@ -72,8 +72,8 @@ def open_output():
     else:
         output_port = 2003
         if ":" in output_host:
-            output_host = output_host.split(":", 1)[0]
             output_port = int(output_host.split(":", 1)[1])
+            output_host = output_host.split(":", 1)[0]
         output_file = SocketWriter(output_host, output_port)
     return output_file
 
@@ -302,6 +302,14 @@ class TsRdsPiops(TimeseriesPattern):
         return [".".join((row.region(), "rds.piops"))]
 
 
+class TsElasticacheInstanceType(TimeseriesPattern):
+    """Describes per-ElastiCache-instance-type Graphite metrics."""
+    def match(self, row):
+        return (row.usage_type().startswith("elasticache-instance."))
+    def metric_names(self, row):
+        return [".".join((row.region(), row.usage_type()))]
+
+
 class TsRegionTotal(TimeseriesPattern):
     """Describes a Graphite metric containing the sum of all hourly costs per region.
     
@@ -326,7 +334,11 @@ class Row(object):
 
            Normalized region names are like 'us-east-2', 'ap-northeast-1'."""
         if REGION_NAMES.has_key(self.content["product/location"]):
+            # Most services have product/location set
             return REGION_NAMES[self.content["product/location"]]
+        elif self.content["lineItem/AvailabilityZone"] and self.content["lineItem/AvailabilityZone"][-1] in "1234567890":
+            # Some services, e.g. ElastiCache, use lineItem/AvailabilityZone instead
+            return self.content["lineItem/AvailabilityZone"]
         return "noregion"
 
     def interval(self):
@@ -385,6 +397,10 @@ class Row(object):
         if csv_usage_type.startswith("RDS:") and csv_usage_type.endswith("Storage"):
             self._usage_type = self._usage_type_rds_storage()
 
+        # ElastiCache
+        if csv_usage_type.startswith("NodeUsage:"):
+            self._usage_type = self._usage_type_elasticache_instance()
+
         return self._usage_type
 
     def _usage_type_ec2_instance(self):
@@ -407,6 +423,13 @@ class Row(object):
     def _usage_type_rds_storage(self):
         return "rds.storage.{0}".format(EBS_TYPES[self.content["product/volumeType"]])
 
+    def _usage_type_elasticache_instance(self):
+        splut = self.content["lineItem/UsageType"].split(":", 1)
+        if len(splut) < 2:
+            return None
+        instance_type = splut[1].replace(".", "-")
+        return "elasticache-instance.{0}".format(instance_type)
+
     def end_time(self):
         return parse_datetime(self.content["identity/TimeInterval"].split("/", 1)[1])
 
@@ -428,6 +451,8 @@ def new_metric_ledger():
         TsRdsInstanceType(),
         TsRdsStorage(),
         TsRdsPiops(),
+        # ElastiCache
+        TsElasticacheInstanceType(),
         # Total
         TsRegionTotal(),
     ])
