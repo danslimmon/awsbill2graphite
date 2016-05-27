@@ -61,8 +61,6 @@ First set the following environment variables:
 * `AWSBILL_METRIC_PREFIX`: The prefix to use for metrics written to Graphite. If absent,
   metrics will begin with "`awsbill.`". If you set this, you should modify the `[awsbill]`
   stanza you added to Graphite's `storage-schemas.conf` accordingly.
-* `AWSBILL_TAGS`: The (comma-separated) tags to produce metrics for. If you don't want
-  to produce metrics for any tags, leave this environment variable empty.
 
 Then run
 
@@ -75,15 +73,6 @@ This will produce metrics named like so:
     PREFIX.REGION.ebs.snapshot
     PREFIX.REGION.ebs.piops
     PREFIX.REGION.rds.db-r3-xlarge
-
-If tags are specified in `AWSBILL_TAGS`, then additional metrics will be populated, named
-like so:
-
-    PREFIX.REGION.TAG_NAME.TAG_VALUE.ec2-instance.t2-micro
-    PREFIX.REGION.TAG_NAME.TAG_VALUE.ec2-instance.c4-2xlarge
-    PREFIX.REGION.TAG_NAME.TAG_VALUE.ebs.snapshot
-    PREFIX.REGION.TAG_NAME.TAG_VALUE.ebs.piops
-    PREFIX.REGION.TAG_NAME.TAG_VALUE.rds.db-r3-xlarge
 
 Each metric will have a data point every hour. This data point represents the total amount
 charged to your account for the hour _previous_ to the data point's timestamp.
