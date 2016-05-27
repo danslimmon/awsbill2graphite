@@ -45,16 +45,16 @@ def parse_datetime(timestamp):
     second = int(timestamp[17:19])
     return datetime(year, month, day, hour, minute, second)
 
-def open_csv(tempdir):
+def open_csv(tempdir, region_name):
     """Opens the latest hourly billing CSV file. Returns an open file object.
-    
+
        Depending on the AWSBILL_REPORT_PATH environment variable, this may involve
        downloading from S3, or it may just open a local file."""
     report_path = os.getenv("AWSBILL_REPORT_PATH")
     if report_path.startswith("file://"):
         csv_path = report_path[len("file://"):]
     elif report_path.startswith("s3://"):
-        csv_path = download_latest_from_s3(report_path, tempdir)
+        csv_path = download_latest_from_s3(report_path, tempdir, region_name)
     else:
         raise ValueError("AWSBILL_REPORT_PATH environment variable must start with 'file://' or 's3://'")
     return open(csv_path)
@@ -83,7 +83,7 @@ def s3_primary_manifests(objects):
        The relevant ones are considered to be the second-most- and most recent ones, and
        they are returned in that order. If there are no billing cycles older than the
        most recent, we return a single-element list with only the most recent manifest.
-    
+
        `objects` should be an iterable of S3 objects."""
     # The path to the billing report manifest is like this:
     #
@@ -114,11 +114,11 @@ def s3_primary_manifests(objects):
         return [manifests[0]]
     return [manifests[1], manifests[0]]
 
-def download_latest_from_s3(s3_path, tempdir):
+def download_latest_from_s3(s3_path, tempdir, region_name):
     """Puts the latest hourly billing report from the given S3 path in a local file.
 
        Returns the path to that file."""
-    s3 = boto3.resource("s3")
+    s3 = boto3.resource("s3", region_name=region_name)
     bucket = s3.Bucket(s3_path.split("/")[2])
     primaries = s3_primary_manifests(bucket.objects.all())
     logging.info("Using primary manifest(s) {0}".format([p.key for p in primaries]))
@@ -312,7 +312,7 @@ class TsElasticacheInstanceType(TimeseriesPattern):
 
 class TsRegionTotal(TimeseriesPattern):
     """Describes a Graphite metric containing the sum of all hourly costs per region.
-    
+
        This includes costs that we don't explicitly recognize and break out into
        individual metrics. Any cost that shows up in the billing report will go into
        this metric."""
@@ -365,7 +365,7 @@ class Row(object):
                ebs.storage.io1
                ebs.piops
                rds-instance.db-r3-large
-               
+
            This method returns the empty string if the usage type isn't known."""
         if self._usage_type is not None:
             return self._usage_type
@@ -474,10 +474,11 @@ if __name__ == "__main__":
     logging.getLogger('boto').setLevel(logging.CRITICAL)
     logging.getLogger('boto3').setLevel(logging.CRITICAL)
     logging.getLogger('botocore').setLevel(logging.CRITICAL)
-
+    if os.getenv("REGION_NAME"):
+        region_name = os.getenv("REGION_NAME")
     try:
         tempdir = tempfile.mkdtemp(".awsbill")
-        csv_file = open_csv(tempdir)
+        csv_file = open_csv(tempdir, region_name='us-west-1')
         output_file = open_output()
         generate_metrics(csv_file, output_file)
         logging.info("Removing temp directory '{0}'".format(tempdir))
