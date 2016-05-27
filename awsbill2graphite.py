@@ -474,11 +474,13 @@ if __name__ == "__main__":
     logging.getLogger('boto').setLevel(logging.CRITICAL)
     logging.getLogger('boto3').setLevel(logging.CRITICAL)
     logging.getLogger('botocore').setLevel(logging.CRITICAL)
-    if os.getenv("REGION_NAME"):
+    if os.getenv("REGION_NAME") != '':
         region_name = os.getenv("REGION_NAME")
+    else: 
+        region_name = 'us-west-1'
     try:
         tempdir = tempfile.mkdtemp(".awsbill")
-        csv_file = open_csv(tempdir, region_name='us-west-1')
+        csv_file = open_csv(tempdir, region_name)
         output_file = open_output()
         generate_metrics(csv_file, output_file)
         logging.info("Removing temp directory '{0}'".format(tempdir))
