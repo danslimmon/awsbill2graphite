@@ -10,7 +10,7 @@ import socket
 import sys
 import tempfile
 from collections import defaultdict
-from datetime import datetime, timedelta
+from datetime import datetime
 from operator import attrgetter
 
 import boto3
@@ -34,9 +34,11 @@ EBS_TYPES = {
     "Provisioned IOPS": "io1",
 }
 
+
 def parse_datetime(timestamp):
     """Parses a timestamp in the format 2006-01-02T15:04:05Z."""
-    # This way is about 31x faster than arrow.get() and 6.5x faster than datetime.strptime()
+    # This way is about 31x faster than arrow.get()
+    # and 6.5x faster than datetime.strptime()
     year = int(timestamp[0:4])
     month = int(timestamp[5:7])
     day = int(timestamp[8:10])
@@ -45,10 +47,11 @@ def parse_datetime(timestamp):
     second = int(timestamp[17:19])
     return datetime(year, month, day, hour, minute, second)
 
+
 def open_csv(tempdir, region_name):
     """Opens the latest hourly billing CSV file. Returns an open file object.
-
-       Depending on the AWSBILL_REPORT_PATH environment variable, this may involve
+       Depending on the AWSBILL_REPORT_PATH environment variable,
+       this may involve
        downloading from S3, or it may just open a local file."""
     report_path = os.getenv("AWSBILL_REPORT_PATH")
     if report_path.startswith("file://"):
@@ -56,17 +59,18 @@ def open_csv(tempdir, region_name):
     elif report_path.startswith("s3://"):
         csv_path = download_latest_from_s3(report_path, tempdir, region_name)
     else:
-        raise ValueError("AWSBILL_REPORT_PATH environment variable must start with 'file://' or 's3://'")
+        raise ValueError("AWSBILL_REPORT_PATH environment variable must start with 'file://' or 's3://'")  # noqa
     return open(csv_path)
+
 
 def open_output():
     """Opens the file-like object that will be used for output, and returns it.
-
-       Depending on the AWSBILL_GRAPHITE_HOST environment variable, writes to this
-       object may be sent to a Graphite server or they may be written to stdout."""
+       Depending on the AWSBILL_GRAPHITE_HOST environment variable,
+       writes to this object may be sent to a Graphite
+       server or they may be written to stdout."""
     output_host = os.getenv("AWSBILL_GRAPHITE_HOST")
     if output_host is None:
-        raise ValueError("AWSBILL_GRAPHITE_HOST environment variable must specify the output destination; you may use 'stdout' to print metrics to stdout")
+        raise ValueError("AWSBILL_GRAPHITE_HOST environment variable must specify the output destination; you may use 'stdout' to print metrics to stdout")  # noqa
     elif output_host == "stdout":
         output_file = sys.stdout
     else:
@@ -77,20 +81,22 @@ def open_output():
         output_file = SocketWriter(output_host, output_port)
     return output_file
 
-def s3_primary_manifests(objects):
-    """Returns the S3 object(s) corresponding to the relevant primary manifest(s).
 
-       The relevant ones are considered to be the second-most- and most recent ones, and
-       they are returned in that order. If there are no billing cycles older than the
-       most recent, we return a single-element list with only the most recent manifest.
+def s3_primary_manifests(objects):
+    """Returns the S3 object(s) corresponding to the relevant primary manifests
+
+       The relevant ones are considered to be the second-most- and most recent
+       ones, and they are returned in that order. If there are no billing
+       cycles older than the most recent, we return a single-element list with
+       only the most recent manifest.
 
        `objects` should be an iterable of S3 objects."""
     # The path to the billing report manifest is like this:
     #
-    # <bucket>/<configured prefix>/hourly_billing/<YYYYmmdd>-<YYYYmmdd>/hourly_billing-Manifest.json
+    # <bucket>/<configured prefix>/hourly_billing/<YYYYmmdd>-<YYYYmmdd>/hourly_billing-Manifest.json  # noqa
     #
-    # We look for the most recent timestamp directory and use the manifest therein to
-    # find the most recent billing CSV.
+    # We look for the most recent timestamp directory and use the manifest
+    #  therein to find the most recent billing CSV.
     manifests = [o for o in objects if o.key.endswith("Manifest.json")]
 
     # Filter to those from the second-most- and most recent billing cycle
@@ -105,7 +111,8 @@ def s3_primary_manifests(objects):
     last_two_cycles = sorted(list(cycles))[-2:]
     if len(last_two_cycles) < 2:
         last_two_cycles = 2 * last_two_cycles
-    manifests = [m for m in manifests if last_two_cycles[0] in m.key or last_two_cycles[1] in m.key]
+    manifests = [m for m in manifests if
+                 last_two_cycles[0] in m.key or last_two_cycles[1] in m.key]
 
     # The primary manifest(s) will be the one(s) with the shortest path length
     manifests.sort(key=lambda a: len(a.key))
@@ -114,14 +121,19 @@ def s3_primary_manifests(objects):
         return [manifests[0]]
     return [manifests[1], manifests[0]]
 
+
 def download_latest_from_s3(s3_path, tempdir, region_name):
-    """Puts the latest hourly billing report from the given S3 path in a local file.
+    """Puts the latest hourly billing report from the given S3 path in a local
+       file.
 
        Returns the path to that file."""
     s3 = boto3.resource("s3", region_name=region_name)
     bucket = s3.Bucket(s3_path.split("/")[2])
     primaries = s3_primary_manifests(bucket.objects.all())
-    logging.info("Using primary manifest(s) {0}".format([p.key for p in primaries]))
+    logging.info("Using primary manifest(s) {0}".format(
+        [p.key for p in primaries]
+        )
+    )
 
     # Now we parse the manifest to get the path to the latest billing CSV
     s3_csvs = []
@@ -145,14 +157,20 @@ def download_latest_from_s3(s3_path, tempdir, region_name):
 
             with gzip.open(local_path, "r") as f:
                 for line in f:
-                    if line.startswith("identity/LineItemId,") and header_written:
+                    if line.startswith(
+                            "identity/LineItemId,"
+                    ) and header_written:
                         continue
                     cat_csv.write(line)
                     header_written = True
             # Remove these files as we finish with them to save on disk space
             os.unlink(local_path)
     except Exception, e:
-        logging.error("Exception encountered; cleaning up by removing temp directory '{0}'".format(tempdir))
+        logging.error(
+            "Exception: cleaning up by removing temp directory '{0}'".format(
+                tempdir
+            )
+        )
         shutil.rmtree(tempdir)
         raise e
 
@@ -166,9 +184,14 @@ class SocketWriter(object):
         self.host = host
         self.port = port
         self._sock = None
+
     def write(self, data):
         if self._sock is None:
-            logging.info("Connecting to Graphite server at {0}:{1}".format(self.host, self.port))
+            logging.info("Connecting to Graphite server at {0}:{1}".format(
+                self.host,
+                self.port
+                )
+            )
             self._sock = socket.create_connection((self.host, self.port))
         return self._sock.send(data)
 
@@ -176,16 +199,20 @@ class SocketWriter(object):
 class MetricLedger(object):
     """Processes Row instances and generates timeseries data from them."""
     def __init__(self, timeseries_patterns):
-        """Initializes the MetricLedger with a list of TimeseriesPattern objects."""
+        """Initializes the MetricLedger with alist of TimeseriesPattern
+        objects."""
         self._patterns = timeseries_patterns
         self._timeseries = defaultdict(lambda: defaultdict(float))
 
     def process(self, row):
-        """Adds the data from the given Row object to any appropriate timeseries."""
+        """Adds the data from the given Row object to any appropriate
+        timeseries."""
         # Skip entries of the wrong type
-        if row.content["lineItem/LineItemType"] != "Usage": return
+        if row.content["lineItem/LineItemType"] != "Usage":
+            return
         # Skip non-hourly entries
-        if row.interval() != 3600: return
+        if row.interval() != 3600:
+            return
 
         for pat in self._patterns:
             if pat.match(row):
@@ -214,11 +241,16 @@ class MetricFormatter(object):
             self._initial_pieces = ["awsbill"]
 
     def format(self, ts_id, timestamp, value):
-        """Returns the Graphite line that corresponds to the given timeseries ID, timestamp, and value."""
+        """Returns the Graphite line that corresponds to the given timeseries
+        ID, timestamp, and value."""
         pieces = [p for p in self._initial_pieces]
         pieces.append(ts_id)
         metric_name = ".".join(pieces)
-        return "{0} {1:04f} {2}\n".format(metric_name, value, timestamp.strftime('%s'))
+        return "{0} {1:04f} {2}\n".format(
+            metric_name,
+            value,
+            timestamp.strftime('%s')
+        )
 
 
 class TimeseriesPattern(object):
@@ -227,14 +259,18 @@ class TimeseriesPattern(object):
        This is an abstract class. Provide an implementation of the match() and
        metric_name() methods."""
     def match(self, row):
-        """Determines whether the given Row instance matches the timeseries pattern.
+        """Determines whether the given Row instance matches the timeseries
+        pattern.
 
            Returns True if so."""
         raise NotImplementedError("This is an abstract class")
-    def metric_names(self, row):
-        """Returns the names of the metrics to which the given row's amount() value should be added.
 
-           We assume that match() has been called on the row already, and returned True."""
+    def metric_names(self, row):
+        """Returns the names of the metrics to which the given row's amount()
+        value should be added.
+
+        We assume that match() has been called on the row already, and
+        returned True."""
         raise NotImplementedError("This is an abstract class")
 
 
@@ -242,6 +278,7 @@ class TsInstanceType(TimeseriesPattern):
     """Describes per-EC2-instance-type Graphite metrics."""
     def match(self, row):
         return (row.usage_type().startswith("ec2-instance."))
+
     def metric_names(self, row):
         return [".".join((row.region(), row.usage_type()))]
 
@@ -250,6 +287,7 @@ class TsEbsStorage(TimeseriesPattern):
     """Describes per-volume-type EBS storage metric."""
     def match(self, row):
         return row.usage_type().startswith("ebs.storage.")
+
     def metric_names(self, row):
         return [".".join((row.region(), row.usage_type()))]
 
@@ -258,6 +296,7 @@ class TsEbsPiops(TimeseriesPattern):
     """Describes the metric for PIOPS-month costs."""
     def match(self, row):
         return row.usage_type() == "ebs.piops"
+
     def metric_names(self, row):
         return [".".join((row.region(), "ebs.piops"))]
 
@@ -266,6 +305,7 @@ class TsEbsIops(TimeseriesPattern):
     """Describes the metric for IOPS costs."""
     def match(self, row):
         return row.usage_type() == "ebs.iops"
+
     def metric_names(self, row):
         return [".".join((row.region(), "ebs.iops"))]
 
@@ -274,6 +314,7 @@ class TsEbsSnapshot(TimeseriesPattern):
     """Describes the metric for EBS snapshot costs."""
     def match(self, row):
         return row.usage_type() == "ebs.snapshot"
+
     def metric_names(self, row):
         return [".".join((row.region(), "ebs.snapshot"))]
 
@@ -282,6 +323,7 @@ class TsRdsInstanceType(TimeseriesPattern):
     """Describes per-RDS-instance-type Graphite metrics."""
     def match(self, row):
         return (row.usage_type().startswith("rds-instance."))
+
     def metric_names(self, row):
         return [".".join((row.region(), row.usage_type()))]
 
@@ -290,6 +332,7 @@ class TsRdsStorage(TimeseriesPattern):
     """Describes per-volume-type RDS storage metric."""
     def match(self, row):
         return row.usage_type().startswith("rds.storage.")
+
     def metric_names(self, row):
         return [".".join((row.region(), row.usage_type()))]
 
@@ -298,6 +341,7 @@ class TsRdsPiops(TimeseriesPattern):
     """Describes the metric for RDS PIOPS-month costs."""
     def match(self, row):
         return row.usage_type() == "rds.piops"
+
     def metric_names(self, row):
         return [".".join((row.region(), "rds.piops"))]
 
@@ -306,26 +350,31 @@ class TsElasticacheInstanceType(TimeseriesPattern):
     """Describes per-ElastiCache-instance-type Graphite metrics."""
     def match(self, row):
         return (row.usage_type().startswith("elasticache-instance."))
+
     def metric_names(self, row):
         return [".".join((row.region(), row.usage_type()))]
 
 
 class TsRegionTotal(TimeseriesPattern):
-    """Describes a Graphite metric containing the sum of all hourly costs per region.
+    """Describes a Graphite metric containing the sum of all hourly costs per
+    region.
 
-       This includes costs that we don't explicitly recognize and break out into
-       individual metrics. Any cost that shows up in the billing report will go into
-       this metric."""
+       This includes costs that we don't explicitly recognize and break out
+       into individual metrics. Any cost that shows up in the billing report
+       will go into this metric."""
     def match(self, row):
         return True
+
     def metric_names(self, row):
         return ["total-cost.{0}".format(row.region())]
 
 
 class Row(object):
     __slots__ = ["content", "_usage_type"]
+
     def __init__(self, col_names, row_list):
-        """Initializes a Row object, given the names of the CSV columns and their values."""
+        """Initializes a Row object, given the names of the CSV columns and
+        their values."""
         self.content = dict(zip(col_names, row_list))
         self._usage_type = None
 
@@ -333,21 +382,26 @@ class Row(object):
         """Returns the normalized AWS region for the row, or 'noregion'.
 
            Normalized region names are like 'us-east-2', 'ap-northeast-1'."""
-        if REGION_NAMES.has_key(self.content["product/location"]):
+        if self.content["product/location"] in REGION_NAMES:
             # Most services have product/location set
             return REGION_NAMES[self.content["product/location"]]
-        elif self.content["lineItem/AvailabilityZone"] and self.content["lineItem/AvailabilityZone"][-1] in "1234567890":
-            # Some services, e.g. ElastiCache, use lineItem/AvailabilityZone instead
+        elif self.content["lineItem/AvailabilityZone"] and \
+                self.content["lineItem/AvailabilityZone"][-1] in "1234567890":
+            # Some services, e.g. ElastiCache, use lineItem/AvailabilityZone
+            # instead
             return self.content["lineItem/AvailabilityZone"]
         return "noregion"
 
     def interval(self):
-        """Returns the length of the time interval to which this row correpsonds, in seconds."""
-        start, end = [parse_datetime(x) for x in self.content["identity/TimeInterval"].split("/", 1)]
+        """Returns the length of the time interval to which this row
+        correpsonds, in seconds."""
+        start, end = [parse_datetime(x) for x in
+                      self.content["identity/TimeInterval"].split("/", 1)]
         return int((end - start).total_seconds())
 
     def usage_type(self):
-        """Parses the "lineItem/UsageType" field to get at the "subtype" (my term).
+        """Parses the "lineItem/UsageType" field to get at the "subtype"
+        (my term).
 
            Usage types can be of many forms. Here are some examples:
 
@@ -357,21 +411,28 @@ class Row(object):
                APN1-DataProcessing-Bytes
                APN1-BoxUsage:c3.2xlarge
 
-           It's a goddamn nightmare. We try our best. Then we return the name of the
-           subtype, in the format in which it'll appear in the Graphite metric. Examples
-           of usage types are:
+           It's a goddamn nightmare. We try our best. Then we return the name
+           of the subtype, in the format in which it'll appear in the Graphite
+           metric.
+           Examples of usage types are:
 
                ec2-instance.c3-2xlarge
                ebs.storage.io1
                ebs.piops
                rds-instance.db-r3-large
 
-           This method returns the empty string if the usage type isn't known."""
+           This method returns the empty string if the usage type isn't
+           known."""
         if self._usage_type is not None:
             return self._usage_type
         splut = self.content["lineItem/UsageType"].split("-", 1)
-        if len(splut[0]) == 4 and splut[0][0:2] in ("US", "EU", "AP", "SA") and splut[0].isupper() and splut[0][3].isdigit():
-            # Stuff before dash was probably a region code like "APN1" or "USW2"
+        if len(splut[0]) == 4 and splut[0][0:2] in (
+                "US",
+                "EU",
+                "AP",
+                "SA"
+        ) and splut[0].isupper() and splut[0][3].isdigit():
+            # Stuff before dash was probably a region code like "APN1"
             csv_usage_type = splut[1]
         else:
             csv_usage_type = splut[0]
@@ -390,11 +451,14 @@ class Row(object):
             self._usage_type = "ebs.snapshot"
 
         # RDS
-        if csv_usage_type.startswith("InstanceUsage:") or csv_usage_type.startswith("Multi-AZUsage:"):
+        if csv_usage_type.startswith("InstanceUsage:") or \
+                csv_usage_type.startswith("Multi-AZUsage:"):
             self._usage_type = self._usage_type_rds_instance()
-        if csv_usage_type == "RDS:PIOPS" or csv_usage_type == "RDS:Multi-AZ-PIOPS":
+        if csv_usage_type == "RDS:PIOPS" or \
+                csv_usage_type == "RDS:Multi-AZ-PIOPS":
             self._usage_type = "rds.piops"
-        if csv_usage_type.startswith("RDS:") and csv_usage_type.endswith("Storage"):
+        if csv_usage_type.startswith("RDS:") and \
+                csv_usage_type.endswith("Storage"):
             self._usage_type = self._usage_type_rds_storage()
 
         # ElastiCache
@@ -411,7 +475,9 @@ class Row(object):
         return "ec2-instance.{0}".format(instance_type)
 
     def _usage_type_ebs_storage(self):
-        return "ebs.storage.{0}".format(EBS_TYPES[self.content["product/volumeType"]])
+        return "ebs.storage.{0}".format(
+            EBS_TYPES[self.content["product/volumeType"]]
+        )
 
     def _usage_type_rds_instance(self):
         splut = self.content["lineItem/UsageType"].split(":", 1)
@@ -421,7 +487,9 @@ class Row(object):
         return "rds-instance.{0}".format(instance_type)
 
     def _usage_type_rds_storage(self):
-        return "rds.storage.{0}".format(EBS_TYPES[self.content["product/volumeType"]])
+        return "rds.storage.{0}".format(
+            EBS_TYPES[self.content["product/volumeType"]]
+        )
 
     def _usage_type_elasticache_instance(self):
         splut = self.content["lineItem/UsageType"].split(":", 1)
@@ -431,13 +499,16 @@ class Row(object):
         return "elasticache-instance.{0}".format(instance_type)
 
     def end_time(self):
-        return parse_datetime(self.content["identity/TimeInterval"].split("/", 1)[1])
+        return parse_datetime(
+            self.content["identity/TimeInterval"].split("/", 1)[1]
+        )
 
     def tags(self):
         return {}
 
     def amount(self):
         return float(self.content["lineItem/BlendedCost"])
+
 
 def new_metric_ledger():
     return MetricLedger([
@@ -457,11 +528,13 @@ def new_metric_ledger():
         TsRegionTotal(),
     ])
 
+
 def generate_metrics(csv_file, output_file):
-    """Generates metrics from the given CSV and writes them to the given file-like object."""
+    """Generates metrics from the given CSV and writes them to the given
+    file-like object."""
     reader = csv.reader(csv_file)
     col_names = reader.next()
-    formatter = MetricFormatter()
+    # formatter = MetricFormatter()
     ledger = new_metric_ledger()
     logging.info("Calculating billing metrics")
     for row_list in reader:
@@ -476,7 +549,7 @@ if __name__ == "__main__":
     logging.getLogger('botocore').setLevel(logging.CRITICAL)
     if os.getenv("REGION_NAME") != '':
         region_name = os.getenv("REGION_NAME")
-    else: 
+    else:
         region_name = 'us-west-1'
     try:
         tempdir = tempfile.mkdtemp(".awsbill")
