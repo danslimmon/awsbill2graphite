@@ -32,6 +32,7 @@ EBS_TYPES = {
     "Magnetic": "standard",
     "General Purpose": "gp2",
     "Provisioned IOPS": "io1",
+    "Unknown Storage": "unknown"
 }
 
 
@@ -210,10 +211,10 @@ class MetricLedger(object):
         # Skip entries of the wrong type
         if row.content["lineItem/LineItemType"] != "Usage":
             return
+
         # Skip non-hourly entries
         if row.interval() != 3600:
             return
-
         for pat in self._patterns:
             if pat.match(row):
                 for metric in pat.metric_names(row):
@@ -277,7 +278,10 @@ class TimeseriesPattern(object):
 class TsInstanceType(TimeseriesPattern):
     """Describes per-EC2-instance-type Graphite metrics."""
     def match(self, row):
-        return (row.usage_type().startswith("ec2-instance."))
+        if row.usage_type():
+            return (row.usage_type().startswith("ec2-instance."))
+        else:
+            pass
 
     def metric_names(self, row):
         return [".".join((row.region(), row.usage_type()))]
@@ -475,9 +479,12 @@ class Row(object):
         return "ec2-instance.{0}".format(instance_type)
 
     def _usage_type_ebs_storage(self):
-        return "ebs.storage.{0}".format(
-            EBS_TYPES[self.content["product/volumeType"]]
-        )
+        if "product/volumeType" in self.content:
+            return "ebs.storage.{0}".format(
+                EBS_TYPES[self.content["product/volumeType"]]
+            )
+        else:
+            return "ebs.storage.unknown"
 
     def _usage_type_rds_instance(self):
         splut = self.content["lineItem/UsageType"].split(":", 1)
