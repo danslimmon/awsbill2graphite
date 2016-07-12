@@ -226,6 +226,7 @@ class MetricLedger(object):
         for ts_id, ts in self._timeseries.iteritems():
             for timestamp, value in ts.iteritems():
                 output_file.write(formatter.format(ts_id, timestamp, value))
+        logging.info("Finished writing {0} metrics to timeseries database", len(self._timeseries))
 
     def get_timeseries(self):
         """Returns self._timeseries (for tests)."""
