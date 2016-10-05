@@ -35,6 +35,14 @@ EBS_TYPES = {
     "Unknown Storage": "unknown"
 }
 
+# As of 2016-09-01, the hourly billing report doesn't have data in the
+# 'product/volumeType' column for RDS storage anymore. We have to check
+# for a substring of 'lineItem/LineItemDescription' instead.
+RDS_STORAGE_TYPES = {
+    "Provisioned IOPS Storage": "io1",
+    "provisioned GP2 storage": "gp2",
+}
+
 
 def parse_datetime(timestamp):
     """Parses a timestamp in the format 2006-01-02T15:04:05Z."""
@@ -226,7 +234,7 @@ class MetricLedger(object):
         for ts_id, ts in self._timeseries.iteritems():
             for timestamp, value in ts.iteritems():
                 output_file.write(formatter.format(ts_id, timestamp, value))
-        logging.info("Finished writing {0} metrics to timeseries database", len(self._timeseries))
+        logging.info("Finished writing %d metrics to timeseries database", len(self._timeseries))
 
     def get_timeseries(self):
         """Returns self._timeseries (for tests)."""
@@ -495,9 +503,14 @@ class Row(object):
         return "rds-instance.{0}".format(instance_type)
 
     def _usage_type_rds_storage(self):
-        return "rds.storage.{0}".format(
-            EBS_TYPES[self.content["product/volumeType"]]
-        )
+        line_item_description = self.content['lineItem/LineItemDescription']
+        volume_type = ""
+        for substring in RDS_STORAGE_TYPES.keys():
+            if substring in line_item_description:
+                volume_type = RDS_STORAGE_TYPES[substring]
+        if volume_type == "":
+            raise ValueError("Can't determine RDS storage type from line item description: '{0}'".format(line_item_description)) #noqa
+        return "rds.storage.{0}".format(volume_type)
 
     def _usage_type_elasticache_instance(self):
         splut = self.content["lineItem/UsageType"].split(":", 1)
